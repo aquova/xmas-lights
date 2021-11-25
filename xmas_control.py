@@ -18,7 +18,7 @@ class Lights:
     def __init__(self):
         self.last_color = (255, 255, 255)
         self.powered = False
-        self.effect_running = False
+        self.effect = "fill"
 
     def is_powered(self):
         return self.powered
@@ -38,11 +38,11 @@ class Lights:
     def format_color_state(self):
         return f"{self.last_color[0]},{self.last_color[1]},{self.last_color[2]}"
 
-    def set_effect(self, is_running):
-        self.effect_running = is_running
+    def set_effect(self, effect):
+        self.effect = effect
 
-    def is_effect_running(self):
-        return self.effect_running
+    def get_effect(self):
+        return self.effect
 
 xmas_state = Lights()
 
@@ -67,8 +67,9 @@ def on_message(client, userdata, message):
         xmas_state.set_color(color)
         pixels.fill(color)
     elif topic == EFFECT_TOPIC:
+        xmas_state.set_effect(command)
         if command == "fill":
-            restore()
+            pixels.fill(xmas_state.get_last_color())
         elif command == "rainbow":
             rainbow_effect()
 
@@ -76,7 +77,11 @@ def clear():
     pixels.fill((0, 0, 0))
 
 def restore():
-    pixels.fill(xmas_state.get_last_color())
+    effect = xmas_state.get_effect()
+    if effect == "fill":
+        pixels.fill(xmas_state.get_last_color())
+    elif effect == "rainbow":
+        rainbow_effect()
 
 def rainbow_effect():
     for i, (r, g, b) in enumerate(rainbow_gradient()):
