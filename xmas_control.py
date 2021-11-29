@@ -1,14 +1,11 @@
 from paho.mqtt.client import Client
 import board, neopixel
-import math, time
+import multiprocessing, time
+import effects
 
-NUM_BULBS = 150
 GPIO_PIN = board.D18
 ORDER = neopixel.RGB
 BRIGHTNESS = 0.15
-
-RGB_SIZE = 255 * 6
-STEP_SIZE = math.floor(RGB_SIZE / NUM_BULBS)
 
 POWER_TOPIC = "bedroom/lights/christmas/switch"
 COLOR_TOPIC = "bedroom/lights/christmas/color"
@@ -19,6 +16,7 @@ class Lights:
         self.last_color = (255, 255, 255)
         self.powered = False
         self.effect = "fill"
+        self.effect_process = None
 
     def is_powered(self):
         return self.powered
@@ -38,8 +36,18 @@ class Lights:
     def format_color_state(self):
         return f"{self.last_color[0]},{self.last_color[1]},{self.last_color[2]}"
 
-    def set_effect(self, effect):
+    def set_effect(self, effect, process):
         self.effect = effect
+        if self.effect_process:
+            self.effect_process.terminate()
+            # Block until process is really dead
+            while self.effect_process.is_alive():
+                time.sleep(0.1)
+            self.effect_process = None
+
+        if process:
+            self.effect_process = process
+            self.effect_process.start()
 
     def get_effect(self):
         return self.effect
@@ -47,7 +55,25 @@ class Lights:
 xmas_state = Lights()
 
 client = Client(client_id = "Christmas_Lights")
-pixels = neopixel.NeoPixel(GPIO_PIN, NUM_BULBS, brightness=BRIGHTNESS, pixel_order=ORDER)
+pixels = neopixel.NeoPixel(GPIO_PIN, effects.NUM_BULBS, brightness=BRIGHTNESS, pixel_order=ORDER)
+
+def restore():
+    effect = xmas_state.get_effect()
+    parse_effect(effect)
+
+def parse_effect(effect_str):
+    effect_thread = None
+    if effect_str == "fill":
+        pixels.fill(xmas_state.get_last_color())
+    elif effect_str == "rainbow":
+        effects.rainbow_effect(pixels)
+    elif effect_str == "classic":
+        effects.classic_effect(pixels)
+    elif effect_str == "christmas":
+        effects.christmas_effect(pixels)
+    elif effect_str == "cycle":
+        effect_thread = multiprocessing.Process(target=effects.cycle_effect, args=(pixels,))
+    xmas_state.set_effect(effect_str, effect_thread)
 
 def on_message(client, userdata, message):
     topic = message.topic
@@ -56,7 +82,7 @@ def on_message(client, userdata, message):
     if topic == POWER_TOPIC:
         if command == "OFF":
             xmas_state.set_powered(False)
-            clear()
+            effects.clear(pixels)
         elif command == "ON":
             if not xmas_state.is_powered():
                 restore()
@@ -67,42 +93,7 @@ def on_message(client, userdata, message):
         xmas_state.set_color(color)
         pixels.fill(color)
     elif topic == EFFECT_TOPIC:
-        xmas_state.set_effect(command)
-        if command == "fill":
-            pixels.fill(xmas_state.get_last_color())
-        elif command == "rainbow":
-            rainbow_effect()
-
-def clear():
-    pixels.fill((0, 0, 0))
-
-def restore():
-    effect = xmas_state.get_effect()
-    if effect == "fill":
-        pixels.fill(xmas_state.get_last_color())
-    elif effect == "rainbow":
-        rainbow_effect()
-
-def rainbow_effect():
-    for i, (r, g, b) in enumerate(rainbow_gradient()):
-        if i == NUM_BULBS:
-            break
-        pixels[i] = (r, g, b)
-
-def rainbow_gradient():
-    r, g, b = 255, 0, 0
-    for g in range(STEP_SIZE, 255, STEP_SIZE):
-        yield r, g, b
-    for r in range(255, STEP_SIZE, -STEP_SIZE):
-        yield r, g, b
-    for b in range(STEP_SIZE, 255, STEP_SIZE):
-        yield r, g, b
-    for g in range(255, STEP_SIZE, -STEP_SIZE):
-        yield r, g, b
-    for r in range(STEP_SIZE, 255, STEP_SIZE):
-        yield r, g, b
-    for b in range(255, STEP_SIZE, -STEP_SIZE):
-        yield r, g, b
+        parse_effect(command)
 
 client.on_message = on_message
 client.connect("jupiter.lan")
