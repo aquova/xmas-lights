@@ -73,6 +73,8 @@ def parse_effect(effect_str):
         effects.christmas_effect(pixels)
     elif effect_str == "cycle":
         effect_thread = multiprocessing.Process(target=effects.cycle_effect, args=(pixels,))
+    elif effect_str == "mountain":
+        effects.mountain_effect(pixels)
     xmas_state.set_effect(effect_str, effect_thread)
 
 def on_message(client, userdata, message):

@@ -37,6 +37,31 @@ def cycle_effect(pixels):
             pixels.fill((r, g, b))
             time.sleep(0.5)
 
+def mountain_effect(pixels):
+    PEAKS = [0, 6, 36, 61, 96, 129, 149]
+
+    # top_color = (255, 255, 255)
+    top_color = (0, 255, 0)
+    btm_color = (255, 0, 0)
+    for idx in range(len(PEAKS) - 1):
+        left = PEAKS[idx]
+        right = PEAKS[idx + 1]
+        gradient = color_gradient(top_color, btm_color, math.ceil((right - left) / 2))
+        for offset, color in enumerate(gradient):
+            pixels[left + offset] = color
+            pixels[right - offset] = color
+
+def color_gradient(start, end, num):
+    rm = start[0] - end[0]
+    gm = start[1] - end[1]
+    bm = start[2] - end[2]
+
+    for i in range(num):
+        red = start[0] - math.floor(rm * i / num)
+        green = start[1] - math.floor(gm * i / num)
+        blue = start[2] - math.floor(bm * i / num)
+        yield red, green, blue
+
 def rainbow_gradient():
     r, g, b = 255, 0, 0
     for g in range(STEP_SIZE, 255, STEP_SIZE):
