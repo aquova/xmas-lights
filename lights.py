@@ -38,7 +38,7 @@ def rainbow_gradient():
 class Lights(NeoPixel):
     def __init__(self, gpio_pin):
         super().__init__(gpio_pin, NUM_BULBS, bpp=3)
-        self.last_color = (255, 255, 255)
+        self.last_color = (128, 128, 128)
         self.powered = False
         self.effect = "fill"
          

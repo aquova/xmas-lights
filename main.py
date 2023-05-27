@@ -1,19 +1,21 @@
 import network
 import time
-from umqtt import MQTTClient
+from umqtt import MQTTClient, MQTTException
 from lights import Lights
 
 WIFI_NAME = "WIFI NAME"
 WIFI_PASS = "PASSWORD"
 MQTT_SERVER = "SERVER NAME"
 
-MQTT_TOPIC = "bedroom/lights/christmas/#"
-POWER_TOPIC = b"bedroom/lights/christmas/switch"
-COLOR_TOPIC = b"bedroom/lights/christmas/color"
-EFFECT_TOPIC = b"bedroom/lights/christmas/effects"
+TOPIC_BASE = b"bedroom/lights/christmas/"
+MQTT_TOPIC = TOPIC_BASE + b"#"
+POWER_TOPIC = TOPIC_BASE + "switch"
+COLOR_TOPIC = TOPIC_BASE + b"color"
+EFFECT_TOPIC = TOPIC_BASE + b"effects"
 
 STATUS_DELAY = 30 # In seconds
-STATUS_TOPIC = b"bedroom/lights/christmas/state"
+POWER_STATUS = TOPIC_BASE + b"state/power"
+COLOR_STATUS = TOPIC_BASE + b"state/color"
 
 GPIO_PIN = machine.Pin(0)
 
@@ -25,15 +27,22 @@ def connect_wifi():
     time.sleep(10)
 
 def connect_mqtt():
-    client = MQTTClient('xmas_lights', MQTT_SERVER, keepalive=3600)
-    client.set_callback(on_message)
-    client.connect()
+    while True:
+        try:
+            client = MQTTClient('xmas_lights', MQTT_SERVER, keepalive=3600)
+            client.set_callback(on_message)
+            client.connect()
+            break
+        except (MQTTException, OSError):
+            print("Failed to connect to the MQTT broker. Waiting to reconnect.")
+            time.sleep(5)
+    print("Connected to MQTT broker")
     return client
 
-def reconnect():
-    print("Failed to connect to the MQTT broker. Reconnecting.")
-    time.sleep(5)
-    machine.reset()
+def send_status():
+    client.publish(POWER_STATUS, "ON" if lights.is_powered() else "OFF")
+    color = lights.get_last_color()
+    client.publish(COLOR_STATUS, f"{color[0]},{color[1]},{color[2]}")
 
 def on_message(topic, msg):
     parsed = False
@@ -55,7 +64,7 @@ def on_message(topic, msg):
         parse_effect(msg)
 
     if parsed:
-        client.publish(STATUS_TOPIC, "ON" if lights.is_powered() else "OFF")
+        send_status()
 
 def parse_effect(effect):
     # I'm not even 100% sure why I need this.
@@ -78,23 +87,22 @@ def parse_effect(effect):
 if __name__ == "__main__":
     wlan = network.WLAN(network.STA_IF)
     connect_wifi()
-    try:
-        client = connect_mqtt()
-        print("Connected to MQTT broker")
-    except OSError as e:
-        reconnect()
+    client = connect_mqtt()
 
     lights = Lights(GPIO_PIN)
+    send_status()
     status_time = time.time()
     while True:
         current_time = time.time()
         if current_time - status_time > STATUS_DELAY:
             status_time = current_time
-            client.publish(STATUS_TOPIC, "ON" if lights.is_powered() else "OFF")
+            send_status()
 
         if not wlan.isconnected():
+            print("Unable to connect to Wi-Fi, reconnecting")
             connect_wifi()
             client = connect_mqtt()
+
         try:
             client.subscribe(MQTT_TOPIC)
         except OSError:
